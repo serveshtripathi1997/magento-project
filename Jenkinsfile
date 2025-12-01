@@ -66,23 +66,22 @@ EOF
         }
 
         stage('Install Magento Code (Composer)') {
-            steps {
-                sh '''
-                echo "===== INSTALLING MAGENTO VIA COMPOSER ====="
+    steps {
+        sh '''
+        echo "===== INSTALLING MAGENTO VIA COMPOSER IN PHP CONTAINER ====="
 
-                docker run --rm \
-                    -e COMPOSER_HOME=/composer \
-                    -v $PWD/src:/var/www/html \
-                    -v $PWD/src/auth:/composer \
-                    composer:2.8 \
-                    composer create-project \
-                        --repository-url=https://repo.magento.com/ \
-                        magento/project-community-edition=2.4.8-p3 .
+        docker exec magento-php bash -lc "
+            cp /var/lib/jenkins/workspace/magento/src/auth/auth.json /var/www/html/auth.json
 
-                echo "===== MAGENTO CODE INSTALLED ====="
-                '''
-            }
-        }
+            composer create-project \
+                --repository-url=https://repo.magento.com/ \
+                magento/project-community-edition=2.4.8-p3 /var/www/html
+        "
+
+        echo "===== MAGENTO CODE INSTALLED ====="
+        '''
+    }
+}
 
         stage('Install Magento System (PHP Container)') {
             steps {
