@@ -16,24 +16,31 @@ pipeline {
         stage('Docker Cleanup') {
             steps {
                 sh '''
+                echo "===== CLEANING DOCKER ENVIRONMENT ====="
                 docker stop $(docker ps -aq) || true
                 docker rm -f $(docker ps -aq) || true
                 docker network prune -f || true
                 docker volume prune -f || true
                 docker image prune -af || true
+                echo "===== DOCKER CLEANUP COMPLETE ====="
                 '''
             }
         }
 
         stage('Start Docker Services') {
             steps {
-                sh 'docker compose up -d'
+                sh '''
+                echo "===== STARTING DOCKER SERVICES ====="
+                docker compose up -d
+                echo "===== DOCKER SERVICES RUNNING ====="
+                '''
             }
         }
 
         stage('Composer Auth Setup') {
             steps {
                 sh """
+                echo "===== GENERATING COMPOSER AUTH FILE ====="
                 mkdir -p src/auth
 
                 cat > src/auth/auth.json << 'EOF'
@@ -51,6 +58,7 @@ EOF
                 sed -i "s/__PASSWORD__/${MAGENTO_AUTH_PSW}/" src/auth/auth.json
 
                 chmod 600 src/auth/auth.json
+                echo "===== AUTH FILE GENERATED ====="
                 """
             }
         }
@@ -58,15 +66,18 @@ EOF
         stage('Install Magento Code (Composer)') {
             steps {
                 sh '''
-                echo "===== INSTALLING MAGENTO VIA COMPOSER (INSIDE PHP CONTAINER) ====="
+                echo "===== INSTALLING MAGENTO VIA COMPOSER (PHP CONTAINER) ====="
 
                 docker exec magento-php bash -lc "
-                    cp /var/www/html/src/auth/auth.json /var/www/html/auth.json
+                    mkdir -p /var/www/html/auth
+                    cp /var/www/html/src/auth/auth.json /var/www/html/auth/auth.json
 
                     composer create-project \
                         --repository-url=https://repo.magento.com/ \
                         magento/project-community-edition=2.4.8-p3 /var/www/html
                 "
+
+                echo "===== MAGENTO CODE DOWNLOADED ====="
                 '''
             }
         }
@@ -74,6 +85,8 @@ EOF
         stage('Install Magento System') {
             steps {
                 sh '''
+                echo "===== RUNNING MAGENTO SETUP:INSTALL ====="
+
                 docker exec magento-php php bin/magento setup:install \
                     --base-url=http://localhost:8090 \
                     --db-host=mariadb \
@@ -87,6 +100,8 @@ EOF
                     --amqp-host=rabbitmq \
                     --amqp-user=magento \
                     --amqp-password=magento123
+
+                echo "===== MAGENTO INSTALLATION COMPLETE ====="
                 '''
             }
         }
@@ -94,10 +109,14 @@ EOF
         stage('Magento Post-Install Tasks') {
             steps {
                 sh '''
+                echo "===== RUNNING POST-INSTALLATION TASKS ====="
+
                 docker exec magento-php php bin/magento cache:flush
                 docker exec magento-php php bin/magento cache:clean
                 docker exec magento-php php bin/magento setup:di:compile
                 docker exec magento-php php bin/magento setup:static-content:deploy -f
+
+                echo "===== MAGENTO OPTIMIZATION COMPLETE ====="
                 '''
             }
         }
@@ -105,10 +124,10 @@ EOF
 
     post {
         success {
-            echo "Magento available at: http://localhost:8090"
+            echo "🎉 Magento is now available at: http://localhost:8090"
         }
         failure {
-            echo "Pipeline failed — check console output."
+            echo "❌ Pipeline failed — check Jenkins console output."
         }
     }
 }
