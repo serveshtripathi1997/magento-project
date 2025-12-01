@@ -1,0 +1,84 @@
+version: "3.9"
+
+services:
+
+  nginx:
+    image: nginx:1.28
+    container_name: magento-nginx
+    depends_on: [php]
+    ports:
+      - "8080:80"
+    volumes:
+      - ./src:/var/www/html
+      - ./env/nginx.conf:/etc/nginx/nginx.conf
+
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile-php83
+    container_name: magento-php
+    volumes:
+      - ./src:/var/www/html
+      - ./env/php.ini:/usr/local/etc/php/conf.d/php.ini
+      - ./env/opcache.ini:/usr/local/etc/php/conf.d/opcache.ini
+
+  composer:
+    image: composer:2.8
+    container_name: magento-composer
+    working_dir: /var/www/html
+    volumes:
+      - ./src:/var/www/html
+      - ~/.composer:/composer
+
+  mariadb:
+    image: mariadb:11.4
+    container_name: magento-db
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: magento
+    volumes:
+      - ./mysql:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  opensearch:
+    image: opensearchproject/opensearch:3.0.0
+    container_name: magento-opensearch
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+    ports:
+      - "9200:9200"
+
+  rabbitmq:
+    image: rabbitmq:4.1-management
+    container_name: magento-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: magento
+      RABBITMQ_DEFAULT_PASS: magento123
+
+  valkey:
+    image: valkey/valkey:8
+    container_name: magento-valkey
+    ports:
+      - "6379:6379"
+
+  artemis:
+    image: quay.io/artemiscloud/activemq-artemis-broker:2.32
+    container_name: magento-artemis
+    ports:
+      - "8161:8161"
+      - "61616:61616"
+
+  cron:
+    build:
+      context: .
+      dockerfile: Dockerfile-php83
+    container_name: magento-cron
+    volumes:
+      - ./src:/var/www/html
+    entrypoint: ["bash", "-c", "while true; do php /var/www/html/bin/magento cron:run; sleep 60; done"]
+

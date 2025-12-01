@@ -1,0 +1,69 @@
+pipeline {
+    agent any
+
+    stages {
+
+        stage('Checkout Repo') {
+            steps {
+                git 'https://github.com/your-repo/magento-docker.git'
+            }
+        }
+
+        stage('Start Docker Services') {
+            steps {
+                sh 'docker compose up -d'
+            }
+        }
+
+        stage('Install Magento Code via Composer') {
+            steps {
+                sh """
+                    docker run --rm \
+                    -v \$PWD/src:/var/www/html \
+                    -v \$HOME/.composer:/composer \
+                    composer:2.8 \
+                    composer create-project \
+                    --repository-url=https://repo.magento.com/ \
+                    magento/project-community-edition=2.4.8-p3 .
+                """
+            }
+        }
+
+        stage('Magento Installation') {
+            steps {
+                sh """
+                docker exec magento-php php bin/magento setup:install \
+                    --base-url=http://localhost:8080 \
+                    --db-host=mariadb \
+                    --db-name=magento \
+                    --db-user=root \
+                    --db-password=root123 \
+                    --backend-frontname=admin \
+                    --amqp-host=rabbitmq \
+                    --amqp-user=magento \
+                    --amqp-password=magento123 \
+                    --search-engine=opensearch \
+                    --opensearch-host=opensearch \
+                    --opensearch-port=9200
+                """
+            }
+        }
+
+        stage('Compile & Deploy Static Content') {
+            steps {
+                sh """
+                docker exec magento-php php bin/magento setup:di:compile
+                docker exec magento-php php bin/magento setup:static-content:deploy -f
+                docker exec magento-php php bin/magento cache:flush
+                """
+            }
+        }
+
+        stage('Verification') {
+            steps {
+                echo "Open: http://localhost:8080"
+            }
+        }
+    }
+}
+

@@ -1,0 +1,12 @@
+FROM php:8.3-fpm
+
+RUN apt-get update && apt-get install -y \
+    git unzip libicu-dev libxml2-dev libxslt1-dev libonig-dev libzip-dev \
+    libpng-dev libjpeg62-turbo-dev libfreetype6-dev wget
+
+RUN docker-php-ext-install intl xsl zip pdo_mysql soap opcache bcmath gd
+
+COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
+
+WORKDIR /var/www/html
+
