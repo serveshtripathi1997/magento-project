@@ -18,22 +18,11 @@ pipeline {
                 sh '''
                 echo "===== CLEANING UP DOCKER ENVIRONMENT ====="
 
-                echo "Stopping all running containers (ignore errors)..."
                 docker stop $(docker ps -aq) || true
-
-                echo "Removing all containers (ignore errors)..."
                 docker rm -f $(docker ps -aq) || true
-
-                echo "Removing orphaned networks..."
                 docker network prune -f || true
-
-                echo "Removing dangling volumes..."
                 docker volume prune -f || true
-
-                echo "Removing unused images..."
                 docker image prune -af || true
-
-                echo "===== DOCKER CLEANUP COMPLETE ====="
                 '''
             }
         }
@@ -65,7 +54,7 @@ pipeline {
                 }
                 EOF
 
-                echo "===== AUTH FILE GENERATED ====="
+                chmod 600 src/auth/auth.json
                 '''
             }
         }
@@ -76,12 +65,13 @@ pipeline {
                 echo "===== INSTALLING MAGENTO VIA COMPOSER ====="
 
                 docker run --rm \
+                    -e COMPOSER_HOME=/composer \
                     -v $PWD/src:/var/www/html \
-                    -v $PWD/src/auth/auth.json:/composer/auth.json \
+                    -v $PWD/src/auth:/composer \
                     composer:2.8 \
                     composer create-project \
-                    --repository-url=https://repo.magento.com/ \
-                    magento/project-community-edition=2.4.8-p3 .
+                        --repository-url=https://repo.magento.com/ \
+                        magento/project-community-edition=2.4.8-p3 .
 
                 echo "===== MAGENTO COMPOSER INSTALL COMPLETE ====="
                 '''
@@ -114,3 +104,4 @@ pipeline {
 
     }
 }
+
