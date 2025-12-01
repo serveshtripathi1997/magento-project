@@ -27,9 +27,7 @@ pipeline {
 
         stage('Start Docker Services') {
             steps {
-                sh '''
-                docker compose up -d
-                '''
+                sh 'docker compose up -d'
             }
         }
 
@@ -42,8 +40,8 @@ pipeline {
 {
   "http-basic": {
     "repo.magento.com": {
-      "username": "1610fb57f5cf7efc5737918d19252904",
-      "password": "ec7a19daf6a93ffbf817d25423e545f1"
+      "username": "__USERNAME__",
+      "password": "__PASSWORD__"
     }
   }
 }
@@ -60,9 +58,11 @@ EOF
         stage('Install Magento Code (Composer)') {
             steps {
                 sh '''
+                echo "===== INSTALLING MAGENTO VIA COMPOSER (INSIDE PHP CONTAINER) ====="
+
                 docker exec magento-php bash -lc "
-                    mkdir -p /var/www/html/auth &&
-                    cp /var/www/html/src/auth/auth.json /var/www/html/auth/auth.json &&
+                    cp /var/www/html/src/auth/auth.json /var/www/html/auth.json
+
                     composer create-project \
                         --repository-url=https://repo.magento.com/ \
                         magento/project-community-edition=2.4.8-p3 /var/www/html
@@ -87,6 +87,17 @@ EOF
                     --amqp-host=rabbitmq \
                     --amqp-user=magento \
                     --amqp-password=magento123
+                '''
+            }
+        }
+
+        stage('Magento Post-Install Tasks') {
+            steps {
+                sh '''
+                docker exec magento-php php bin/magento cache:flush
+                docker exec magento-php php bin/magento cache:clean
+                docker exec magento-php php bin/magento setup:di:compile
+                docker exec magento-php php bin/magento setup:static-content:deploy -f
                 '''
             }
         }
