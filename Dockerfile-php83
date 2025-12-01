@@ -1,35 +1,41 @@
 FROM php:8.3-fpm
 
-# Install system dependencies (compatible with Debian Trixie)
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    git unzip libicu-dev libxml2-dev libxslt1-dev libonig-dev \
-    libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
-    libcurl4-openssl-dev pkg-config libssl-dev libxslt1.1 \
-    zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget \
-    libmcrypt-dev build-essential libmagickwand-dev --no-install-recommends
+    git unzip \
+    libicu-dev \
+    libxml2-dev \
+    libxslt1-dev \
+    libzip-dev \
+    libpng-dev \
+    libjpeg62-turbo-dev \
+    libfreetype6-dev \
+    libcurl4-openssl-dev \
+    pkg-config \
+    libssl-dev \
+    zlib1g-dev \
+    libbz2-dev \
+    libsqlite3-dev \
+    libreadline-dev \
+    build-essential \
+    libmagickwand-dev --no-install-recommends
 
-# Configure GD properly
-RUN docker-php-ext-configure gd \
-    --with-jpeg \
-    --with-freetype
+# Fix intl for PHP 8.3 (important on Debian testing)
+RUN docker-php-ext-install intl
 
-# Install PHP Extensions required by Magento
-RUN docker-php-ext-install \
-    intl \
-    xsl \
-    zip \
-    bcmath \
-    soap \
-    gd \
-    pdo_mysql \
-    opcache \
-    sockets
+# Install required PHP extensions
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+  && docker-php-ext-install \
+        bcmath \
+        xsl \
+        soap \
+        gd \
+        zip \
+        pdo_mysql \
+        opcache \
+        sockets
 
 # Install Composer
 COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
-
-# NodeJS for future front-end tasks (optional)
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs
 
 WORKDIR /var/www/html
