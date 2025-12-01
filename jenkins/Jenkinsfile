@@ -27,6 +27,14 @@ pipeline {
             }
         }
 
+        stage('Rebuild PHP Image') {
+    steps {
+        sh '''
+        docker compose build --no-cache php
+        '''
+    }
+}
+
         stage('Start Docker Services') {
             steps {
                 sh '''
