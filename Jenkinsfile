@@ -17,7 +17,6 @@ pipeline {
             steps {
                 sh '''
                 echo "===== CLEANING UP DOCKER ENVIRONMENT ====="
-
                 docker stop $(docker ps -aq) || true
                 docker rm -f $(docker ps -aq) || true
                 docker network prune -f || true
@@ -43,29 +42,7 @@ pipeline {
                 echo "===== GENERATING COMPOSER AUTH FILE ====="
                 mkdir -p src/auth
 
-                cat <<EOF > src/auth/auth.json
-                {
-                  "http-basic": {
-                    "repo.magento.com": {
-                      "username": "${MAGENTO_AUTH_USR}",
-                      "password": "${MAGENTO_AUTH_PSW}"
-                    }
-                  }
-                }
-                EOF
-
-                chmod 600 src/auth/auth.json
-                '''
-            }
-        }
-
-stage('Composer Auth Setup') {
-    steps {
-        sh '''
-        echo "===== GENERATING COMPOSER AUTH FILE ====="
-        mkdir -p src/auth
-
-        cat > src/auth/auth.json << 'EOF'
+                cat > src/auth/auth.json << 'EOF'
 {
   "http-basic": {
     "repo.magento.com": {
@@ -76,11 +53,30 @@ stage('Composer Auth Setup') {
 }
 EOF
 
-        chmod 600 src/auth/auth.json
-        echo "===== AUTH FILE GENERATED ====="
-        '''
-    }
-}
+                chmod 600 src/auth/auth.json
+                echo "===== AUTH FILE GENERATED ====="
+                '''
+            }
+        }
+
+        stage('Install Magento Code (Composer)') {
+            steps {
+                sh '''
+                echo "===== INSTALLING MAGENTO VIA COMPOSER ====="
+
+                docker run --rm \
+                    -e COMPOSER_HOME=/composer \
+                    -v $PWD/src:/var/www/html \
+                    -v $PWD/src/auth:/composer \
+                    composer:2.8 \
+                    composer create-project \
+                        --repository-url=https://repo.magento.com/ \
+                        magento/project-community-edition=2.4.8-p3 .
+
+                echo "===== MAGENTO COMPOSER INSTALL COMPLETE ====="
+                '''
+            }
+        }
 
         stage('Install Magento System (PHP Container)') {
             steps {
@@ -105,7 +101,5 @@ EOF
                 '''
             }
         }
-
     }
 }
-
