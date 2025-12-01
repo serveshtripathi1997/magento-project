@@ -22,6 +22,7 @@ pipeline {
                 docker network prune -f || true
                 docker volume prune -f || true
                 docker image prune -af || true
+                echo "===== CLEANUP COMPLETE ====="
                 '''
             }
         }
@@ -38,24 +39,29 @@ pipeline {
 
         stage('Composer Auth Setup') {
             steps {
-                sh '''
+                sh """
                 echo "===== GENERATING COMPOSER AUTH FILE ====="
                 mkdir -p src/auth
 
+                # Write JSON WITHOUT expanding Jenkins variables
                 cat > src/auth/auth.json << 'EOF'
 {
   "http-basic": {
     "repo.magento.com": {
-      "username": "'"${MAGENTO_AUTH_USR}"'",
-      "password": "'"${MAGENTO_AUTH_PSW}"'"
+      "username": "1610fb57f5cf7efc5737918d19252904",
+      "password": "ec7a19daf6a93ffbf817d25423e545f1"
     }
   }
 }
 EOF
 
+                # Safely insert Jenkins credentials
+                sed -i "s/__USERNAME__/${MAGENTO_AUTH_USR}/" src/auth/auth.json
+                sed -i "s/__PASSWORD__/${MAGENTO_AUTH_PSW}/" src/auth/auth.json
+
                 chmod 600 src/auth/auth.json
-                echo "===== AUTH FILE GENERATED ====="
-                '''
+                echo "===== AUTH FILE CREATED ====="
+                """
             }
         }
 
@@ -73,7 +79,7 @@ EOF
                         --repository-url=https://repo.magento.com/ \
                         magento/project-community-edition=2.4.8-p3 .
 
-                echo "===== MAGENTO COMPOSER INSTALL COMPLETE ====="
+                echo "===== MAGENTO CODE INSTALLED ====="
                 '''
             }
         }
@@ -97,9 +103,21 @@ EOF
                     --amqp-user=magento \
                     --amqp-password=magento123
 
-                echo "===== MAGENTO INSTALLATION COMPLETE ====="
+                echo "===== MAGENTO INSTALLED SUCCESSFULLY ====="
                 '''
             }
         }
     }
+
+    post {
+        success {
+            echo "🎉 Magento Deployment Completed Successfully!"
+            echo "Frontend:  http://localhost:8090"
+            echo "Admin URL: http://localhost:8090/admin"
+        }
+        failure {
+            echo "❌ Build Failed — check Jenkins console output."
+        }
+    }
 }
+
