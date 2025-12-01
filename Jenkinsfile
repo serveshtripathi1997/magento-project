@@ -59,24 +59,28 @@ pipeline {
             }
         }
 
-        stage('Install Magento Code (Composer)') {
-            steps {
-                sh '''
-                echo "===== INSTALLING MAGENTO VIA COMPOSER ====="
+stage('Composer Auth Setup') {
+    steps {
+        sh '''
+        echo "===== GENERATING COMPOSER AUTH FILE ====="
+        mkdir -p src/auth
 
-                docker run --rm \
-                    -e COMPOSER_HOME=/composer \
-                    -v $PWD/src:/var/www/html \
-                    -v $PWD/src/auth:/composer \
-                    composer:2.8 \
-                    composer create-project \
-                        --repository-url=https://repo.magento.com/ \
-                        magento/project-community-edition=2.4.8-p3 .
+        cat > src/auth/auth.json << 'EOF'
+{
+  "http-basic": {
+    "repo.magento.com": {
+      "username": "'"${MAGENTO_AUTH_USR}"'",
+      "password": "'"${MAGENTO_AUTH_PSW}"'"
+    }
+  }
+}
+EOF
 
-                echo "===== MAGENTO COMPOSER INSTALL COMPLETE ====="
-                '''
-            }
-        }
+        chmod 600 src/auth/auth.json
+        echo "===== AUTH FILE GENERATED ====="
+        '''
+    }
+}
 
         stage('Install Magento System (PHP Container)') {
             steps {
