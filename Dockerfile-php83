@@ -1,41 +1,22 @@
 FROM php:8.3-fpm
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    git unzip \
+    libzip-dev \
     libicu-dev \
     libxml2-dev \
-    libxslt1-dev \
-    libzip-dev \
+    libxslt-dev \
     libpng-dev \
-    libjpeg62-turbo-dev \
-    libfreetype6-dev \
-    libcurl4-openssl-dev \
-    pkg-config \
-    libssl-dev \
-    zlib1g-dev \
-    libbz2-dev \
-    libsqlite3-dev \
-    libreadline-dev \
-    build-essential \
-    libmagickwand-dev --no-install-recommends
-
-# Fix intl for PHP 8.3 (important on Debian testing)
-RUN docker-php-ext-install intl
-
-# Install required PHP extensions
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-  && docker-php-ext-install \
+    libjpeg-dev \
+    unzip \
+    git \
+    && docker-php-ext-install \
         bcmath \
-        xsl \
+        intl \
         soap \
-        gd \
+        xsl \
         zip \
+        gd \
         pdo_mysql \
-        opcache \
-        sockets
-
-# Install Composer
-COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
-
-WORKDIR /var/www/html
+        sockets \
+        ftp \
+    && rm -rf /var/lib/apt/lists/*
