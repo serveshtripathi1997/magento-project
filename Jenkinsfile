@@ -16,15 +16,13 @@ pipeline {
         }
 
         stage('Start Docker Services') {
-            steps {
-                echo "===== STARTING DOCKER SERVICES ====="
-                dir("${PROJECT_DIR}") {
-                    sh "docker compose down || true"
-                    sh "docker compose up -d"
-                }
-                sh "sleep 10"
-            }
+    steps {
+        dir("${WORKSPACE}/magento-project") {
+            sh "docker compose down || true"
+            sh "docker compose up -d"
         }
+    }
+}
 
         stage('Clean Web Directory') {
             steps {
