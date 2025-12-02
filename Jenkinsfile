@@ -16,18 +16,24 @@ pipeline {
         }
 
         stage('Start Docker Services') {
-    steps {
-        dir("${WORKSPACE}/magento-project") {
-            sh "docker compose down || true"
-            sh "docker compose up -d"
+            steps {
+                dir("${WORKSPACE}/magento-project") {
+
+                    echo "===== STOPPING OLD SERVICES ====="
+                    sh "docker compose down || true"
+
+                    echo "===== BUILDING PHP IMAGE (NO CACHE) ====="
+                    sh "docker compose build --no-cache php"
+
+                    echo "===== STARTING DOCKER SERVICES ====="
+                    sh "docker compose up -d"
+                }
+            }
         }
-    }
-}
 
         stage('Clean Web Directory') {
             steps {
                 echo "===== CLEANING /var/www/html DIRECTORY ====="
-
                 sh """
                     docker exec magento-php bash -lc '
                         rm -rf ${MAGENTO_DIR}/*
@@ -60,7 +66,6 @@ pipeline {
         stage('Magento Setup Install') {
             steps {
                 echo "===== RUNNING MAGENTO SETUP:INSTALL ====="
-
                 sh """
                     docker exec magento-php bash -lc '
                         php ${MAGENTO_DIR}/bin/magento setup:install \
@@ -70,53 +75,4 @@ pipeline {
                             --db-user="root" \
                             --db-password="root123" \
                             --admin-firstname="Servesh" \
-                            --admin-lastname="Tripathi" \
-                            --admin-email="admin@example.com" \
-                            --admin-user="admin" \
-                            --admin-password="Admin@1234" \
-                            --backend-frontname="adminpanel" \
-                            --search-engine="opensearch" \
-                            --opensearch-host="magento-opensearch" \
-                            --opensearch-port=9200 \
-                            --amqp-host="magento-rabbitmq" \
-                            --amqp-port=5672 \
-                            --amqp-user="magento" \
-                            --amqp-password="magento123" \
-                            --cache-backend="redis" \
-                            --cache-backend-redis-server="magento-valkey" \
-                            --cache-backend-redis-port=6379 \
-                            --page-cache-redis-server="magento-valkey" \
-                            --page-cache-redis-port=6379 \
-                            --session-save=redis \
-                            --session-save-redis-host="magento-valkey" \
-                            --session-save-redis-port=6379 \
-                            --use-rewrites=1
-                    '
-                """
-            }
-        }
-
-        stage('Post-Install Setup') {
-            steps {
-                echo "===== FINALIZING MAGENTO ENVIRONMENT ====="
-
-                sh """
-                    docker exec magento-php bash -lc '
-                        php ${MAGENTO_DIR}/bin/magento deploy:mode:set developer
-                        php ${MAGENTO_DIR}/bin/magento cache:flush
-                        chmod -R 777 ${MAGENTO_DIR}
-                    '
-                """
-            }
-        }
-    }
-
-    post {
-        success {
-            echo "🎉 Magento Build + Install Completed Successfully!"
-        }
-        failure {
-            echo "❌ Build Failed — check Jenkins console output."
-        }
-    }
-}
+                            --ad
