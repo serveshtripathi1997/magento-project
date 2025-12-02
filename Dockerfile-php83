@@ -4,7 +4,7 @@ RUN apt-get update && apt-get install -y \
     libzip-dev \
     libicu-dev \
     libxml2-dev \
-    libxslt-dev \
+    libxslt1-dev \
     libpng-dev \
     libjpeg-dev \
     unzip \
@@ -20,3 +20,8 @@ RUN apt-get update && apt-get install -y \
         sockets \
         ftp \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Composer
+RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
+    && php composer-setup.php --install-dir=/usr/local/bin --filename=composer \
+    && rm composer-setup.php
