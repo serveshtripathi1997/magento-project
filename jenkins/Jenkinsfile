@@ -2,136 +2,145 @@ pipeline {
     agent any
 
     environment {
-        MAGENTO_AUTH = credentials('magento-marketplace-auth')
+        PROJECT_DIR = "/home/serveshtripathi/magento-project"
+        AUTH_FILE   = "${PROJECT_DIR}/src/auth/auth.json"
+        MAGENTO_DIR = "/var/www/html"
     }
 
     stages {
 
         stage('Checkout') {
             steps {
+                echo "===== CHECKING OUT REPO ====="
                 checkout scm
-            }
-        }
-
-        stage('Docker Cleanup') {
-            steps {
-                sh '''
-                echo "===== CLEANING UP DOCKER ENVIRONMENT ====="
-                docker stop $(docker ps -aq) || true
-                docker rm -f $(docker ps -aq) || true
-                docker network prune -f || true
-                docker volume prune -f || true
-                docker image prune -af || true
-                echo "===== CLEANUP COMPLETE ====="
-                '''
             }
         }
 
         stage('Start Docker Services') {
             steps {
-                sh '''
                 echo "===== STARTING DOCKER SERVICES ====="
-                docker compose up -d --build
-                echo "===== DOCKER SERVICES RUNNING ====="
-                '''
+                dir("${PROJECT_DIR}") {
+                    sh "docker compose down || true"
+                    sh "docker compose up -d"
+                }
+                sh "sleep 10"
             }
         }
 
-        stage('Composer Auth Setup') {
+        stage('Prepare Composer Auth') {
             steps {
-                sh '''
-                echo "===== GENERATING COMPOSER AUTH FILE ====="
-                
-                mkdir -p src
-                mkdir -p src/auth
+                echo "===== PREPARING COMPOSER AUTH ====="
 
-cat > src/auth/auth.json << EOF
-{
-  "http-basic": {
-    "repo.magento.com": {
-      "username": "${MAGENTO_AUTH_USR}",
-      "password": "${MAGENTO_AUTH_PSW}"
-    }
-  }
-}
-EOF
+                // Create auth.json inside src if missing
+                sh """
+                    mkdir -p ${PROJECT_DIR}/src/auth
+                    chmod 777 ${PROJECT_DIR}/src/auth
+                """
 
-                chmod 600 src/auth/auth.json
-                echo "===== AUTH FILE CREATED ====="
-                '''
+                writeFile file: "${PROJECT_DIR}/src/auth/auth.json", text: """
+                {
+                    "http-basic": {
+                        "repo.magento.com": {
+                            "username": "${MAGENTO_AUTH_USR}",
+                            "password": "${MAGENTO_AUTH_PSW}"
+                        }
+                    }
+                }
+                """
+
+                echo "Auth file created at host → copying into PHP container"
+
+                sh """
+                    docker cp ${AUTH_FILE} magento-php:${MAGENTO_DIR}/auth.json
+                """
             }
         }
 
-        stage('Install Magento Code (Composer)') {
+        stage('Clean Magento Directory') {
             steps {
-                sh '''
-                echo "===== INSTALLING MAGENTO VIA COMPOSER IN PHP CONTAINER ====="
+                echo "===== CLEANING MAGENTO DIRECTORY ====="
 
-                docker exec magento-php bash -lc "
-                    mkdir -p /var/www/html/src/auth
-                    cp /var/lib/jenkins/workspace/magento/src/auth/auth.json /var/www/html/auth.json
+                sh """
+                    docker exec magento-php bash -lc "rm -rf ${MAGENTO_DIR}/*"
+                """
+            }
+        }
 
-                    composer create-project \
+        stage('Install Magento Source Code') {
+            steps {
+                echo "===== INSTALLING MAGENTO CODE (composer create-project) ====="
+
+                sh """
+                    docker exec magento-php bash -lc '
+                        composer create-project \
                         --repository-url=https://repo.magento.com/ \
-                        magento/project-community-edition=2.4.8-p3 /var/www/html
-                "
-
-                echo "===== MAGENTO CODE INSTALLED ====="
-                '''
+                        magento/project-community-edition=2.4.8-p3 \
+                        ${MAGENTO_DIR}
+                    '
+                """
             }
         }
 
-        stage('Install Magento System (PHP Container)') {
+        stage('Magento Installation') {
             steps {
-                sh '''
-                echo "===== RUNNING MAGENTO SETUP:INSTALL ====="
+                echo "===== INSTALLING MAGENTO SYSTEM ====="
 
-                docker exec magento-php bash -lc "
-                php bin/magento setup:install \
-                    --base-url=http://localhost:8090 \
-                    --db-host=mariadb \
-                    --db-name=magento \
-                    --db-user=root \
-                    --db-password=root123 \
-                    --backend-frontname=admin \
-                    --search-engine=opensearch \
-                    --opensearch-host=opensearch \
-                    --opensearch-port=9200 \
-                    --amqp-host=rabbitmq \
-                    --amqp-user=magento \
-                    --amqp-password=magento123
-                "
-
-                echo "===== MAGENTO INSTALLED SUCCESSFULLY ====="
-                '''
+                sh """
+                    docker exec magento-php bash -lc '
+                        php ${MAGENTO_DIR}/bin/magento setup:install \
+                        --base-url="http://localhost:8090/" \
+                        --db-host="magento-db" \
+                        --db-name="magento" \
+                        --db-user="root" \
+                        --db-password="root123" \
+                        --admin-firstname="Servesh" \
+                        --admin-lastname="Tripathi" \
+                        --admin-email="admin@example.com" \
+                        --admin-user="admin" \
+                        --admin-password="Admin@1234" \
+                        --backend-frontname="adminpanel" \
+                        --search-engine="opensearch" \
+                        --opensearch-host="magento-opensearch" \
+                        --opensearch-port=9200 \
+                        --amqp-host="magento-rabbitmq" \
+                        --amqp-port=5672 \
+                        --amqp-user="magento" \
+                        --amqp-password="magento123" \
+                        --cache-backend="redis" \
+                        --cache-backend-redis-server="magento-valkey" \
+                        --cache-backend-redis-port=6379 \
+                        --page-cache-redis-server="magento-valkey" \
+                        --page-cache-redis-port=6379 \
+                        --session-save=redis \
+                        --session-save-redis-host="magento-valkey" \
+                        --session-save-redis-port=6379 \
+                        --use-rewrites=1
+                    '
+                """
             }
         }
 
-        stage('Magento Post-Install Tasks') {
+        stage('Post-Installation Commands') {
             steps {
-                sh '''
-                echo "===== MAGENTO POST-INSTALL TASKS ====="
+                echo "===== FINALIZING MAGENTO ====="
 
-                docker exec magento-php php bin/magento cache:flush
-                docker exec magento-php php bin/magento cache:clean
-
-                docker exec magento-php php bin/magento setup:di:compile
-                docker exec magento-php php bin/magento setup:static-content:deploy -f
-
-                echo "===== POST-INSTALL TASKS COMPLETE ====="
-                '''
+                sh """
+                    docker exec magento-php bash -lc '
+                        php ${MAGENTO_DIR}/bin/magento deploy:mode:set developer
+                        php ${MAGENTO_DIR}/bin/magento cache:flush
+                        chmod -R 777 ${MAGENTO_DIR}
+                    '
+                """
             }
         }
     }
 
     post {
         success {
-            echo "🎉 Magento Deployment Completed Successfully!"
-            echo "Frontend:  http://localhost:8090"
-            echo "Admin URL: http://localhost:8090/admin"
+            echo "🎉 Build & Install Completed Successfully!"
         }
         failure {
-            echo "❌ Build Failed — check Jenkins console output."
+            echo "❌ Build Failed — Check Console Output"
         }
     }
 }
